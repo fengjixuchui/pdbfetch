@@ -181,6 +181,8 @@ func downloadSymbolFile(filepath string, url string) error {
 		reader = resp.Body
 	}
 
+	log.Println("Saving PDB to", filepath)
+
 	// Create the file
 	out, err := os.Create(filepath)
 	if err != nil {
@@ -196,7 +198,7 @@ func downloadSymbolFile(filepath string, url string) error {
 func help() {
 	fmt.Println("Fetches PDB symbol files directly from Microsoft's symbol servers.")
 	fmt.Println("A PE file is supplied by the `pefile` argument.")
-	fmt.Println("An optional save directory can be supplied bt the `directory` argument.")
+	fmt.Println("An optional save directory can be supplied by the `directory` argument.")
 	fmt.Println("")
 	fmt.Println("Usage:")
 	fmt.Println("   ", filepath.Base(os.Args[0]), "pefile [directory]")
@@ -231,17 +233,13 @@ func main() {
 	// Determine the symbol save directory.
 	var saveDirectory string
 	if nArgs > 2 {
-		saveDirectory = os.Args[3]
+		saveDirectory = os.Args[2]
 	} else {
 		absPath, err := filepath.Abs(os.Args[0])
 		if err != nil {
 			log.Fatal(err)
 		}
 		saveDirectory = filepath.Dir(absPath)
-	}
-	if saveDirectory[len(saveDirectory)-1] == '\\' ||
-		saveDirectory[len(saveDirectory)-1] == '/' {
-		saveDirectory = saveDirectory[:len(saveDirectory)-1]
 	}
 
 	// Check if the given PE path exists.
@@ -271,12 +269,9 @@ func main() {
 				log.Fatal(err)
 			}
 
-			// Get the PDB name.
-			pdbName := string(debugDir.SymbolName)
-			slashIdx := strings.LastIndexByte(pdbName, byte('\\'))
-			if slashIdx >= 0 {
-				pdbName = pdbName[slashIdx+1:]
-			}
+			// Get the PDB filename.
+			fullPdbPath := string(debugDir.SymbolName)
+			pdbName := filepath.Base(fullPdbPath)
 
 			// Get the PDB age string.
 			pdbAgeStr := strconv.FormatUint(uint64(debugDir.InfoPdb70.Age), 16)
@@ -287,14 +282,14 @@ func main() {
 			log.Println(string(debugDir.SymbolName)+":", pdbGuid, pdbAgeStr, downloadURL)
 
 			// Create directory for saving symbol file.
-			downloadDir := saveDirectory + "/" + pdbName + "/" + pdbGuidStr + "/" + pdbAgeStr + "/"
-			err = os.MkdirAll(downloadDir, 0644)
+			downloadDir := filepath.Join(saveDirectory, pdbName, strings.ToUpper(pdbGuidStr)+strings.ToUpper(pdbAgeStr))
+			err = os.MkdirAll(downloadDir, 0755)
 			if err != nil {
 				log.Fatal(err)
 			}
 
-			// Download the symbol file.
-			downloadPath := downloadDir + pdbName
+			// Download the symbol file. FilePath concatenates guid and age
+			downloadPath := filepath.Join(downloadDir, pdbName)
 			err = downloadSymbolFile(downloadPath, downloadURL)
 			if err != nil {
 				log.Fatal(err)
